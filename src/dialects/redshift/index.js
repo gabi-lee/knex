@@ -73,9 +73,11 @@ assign(Client_PG.prototype, {
         }
       }
       escaped += '\''
-      if (hasBackslash === true) {
-        escaped = 'E' + escaped
-      }
+// removed by Lior H. 6/2/2018 - redshift does not support Escaped literal as postgres
+      // if (hasBackslash === true) {
+      //   escaped = 'E' + escaped
+      // }
+
       return escaped
     },
     escapeObject(val, prepareValue, timezone, seen = []) {
