@@ -1,75 +1,62 @@
-
-// PostgreSQL Column Compiler
+// Redshift Column Compiler
 // -------
 
 import inherits from 'inherits';
-import ColumnCompiler from '../../../schema/columncompiler';
-import * as helpers from '../../../helpers';
+import ColumnCompiler_PG from '../../postgres/schema/columncompiler';
 
-import { assign } from 'lodash'
+import { assign } from 'lodash';
 
-function ColumnCompiler_PG() {
-  ColumnCompiler.apply(this, arguments);
-  this.modifiers = ['nullable', 'defaultTo', 'comment']
+function ColumnCompiler_Redshift() {
+  ColumnCompiler_PG.apply(this, arguments);
 }
-inherits(ColumnCompiler_PG, ColumnCompiler);
+inherits(ColumnCompiler_Redshift, ColumnCompiler_PG);
 
-assign(ColumnCompiler_PG.prototype, {
-
-  // Types
+assign(ColumnCompiler_Redshift.prototype, {
+  // Types:
   // ------
-  bigincrements: 'bigserial primary key',
-  bigint: 'bigint',
-  binary: 'bytea',
-
+  bigincrements: 'bigint identity(1,1) primary key not null',
+  binary: 'varchar(max)',
   bit(column) {
-    return column.length !== false ? `bit(${column.length})` : 'bit';
+    return column.length !== false ? `char(${column.length})` : 'char(1)';
   },
-
-  bool: 'boolean',
-
-  // Create the column definition for an enum type.
-  // Using method "2" here: http://stackoverflow.com/a/10984951/525714
-  enu(allowed) {
-    return `text check (${this.formatter.wrap(this.args[0])} in ('${allowed.join("', '")}'))`;
-  },
-
-  double: 'double precision',
-  floating: 'real',
-  increments: 'INT IDENTITY(1,1) primary key',
-  json(jsonb) {
-    if (jsonb) helpers.deprecate('json(true)', 'jsonb()')
-    return jsonColumn(this.client, jsonb);
-  },
-  jsonb() {
-    return jsonColumn(this.client, true);
-  },
-  smallint: 'smallint',
-  tinyint:  'smallint',
+  blob: 'varchar(max)',
+  enu: 'varchar(255)',
+  enum: 'varchar(255)',
+  increments: 'integer identity(1,1) primary key not null',
+  json: 'varchar(max)',
+  jsonb: 'varchar(max)',
+  longblob: 'varchar(max)',
+  mediumblob: 'varchar(16777218)',
+  set: 'text',
+  text: 'varchar(max)',
   datetime(without) {
     return without ? 'timestamp' : 'timestamptz';
   },
   timestamp(without) {
     return without ? 'timestamp' : 'timestamptz';
   },
-  uuid: 'uuid',
+  tinyblob: 'varchar(256)',
+  uuid: 'char(36)',
+  varbinary: 'varchar(max)',
+  bigint: 'bigint',
+  bool: 'boolean',
+  double: 'double precision',
+  floating: 'real',
+  smallint: 'smallint',
+  tinyint: 'smallint',
 
   // Modifiers:
   // ------
   comment(comment) {
-    const columnName = this.args[0] || this.defaults('columnName');
-    
     this.pushAdditional(function() {
-      this.pushQuery(`comment on column ${this.tableCompiler.tableName()}.` +
-        this.formatter.wrap(columnName) + " is " + (comment ? `'${comment}'` : 'NULL'));
+      this.pushQuery(
+        `comment on column ${this.tableCompiler.tableName()}.` +
+          this.formatter.wrap(this.args[0]) +
+          ' is ' +
+          (comment ? `'${comment}'` : 'NULL')
+      );
     }, comment);
-  }
+  },
+});
 
-})
-
-function jsonColumn(client, jsonb) {
-  if (!client.version || parseFloat(client.version) >= 9.2) return jsonb ? 'jsonb' : 'json';
-  return 'text';
-}
-
-export default ColumnCompiler_PG;
+export default ColumnCompiler_Redshift;

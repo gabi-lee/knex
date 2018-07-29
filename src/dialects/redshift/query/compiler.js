@@ -1,108 +1,121 @@
-
-// PostgreSQL Query Builder & Compiler
+// Redshift Query Builder & Compiler
 // ------
 import inherits from 'inherits';
 
 import QueryCompiler from '../../../query/compiler';
+import QueryCompiler_PG from '../../postgres/query/compiler';
 
-import { assign, reduce } from 'lodash'
+import { assign, reduce, identity } from 'lodash';
 
-function QueryCompiler_PG(client, builder) {
-  QueryCompiler.call(this, client, builder);
+function QueryCompiler_Redshift(client, builder) {
+  QueryCompiler_PG.call(this, client, builder);
 }
-inherits(QueryCompiler_PG, QueryCompiler);
+inherits(QueryCompiler_Redshift, QueryCompiler_PG);
 
-assign(QueryCompiler_PG.prototype, {
-
-  // Compiles a truncate query.
+assign(QueryCompiler_Redshift.prototype, {
   truncate() {
-    return `truncate ${this.tableName} restart identity`;
+    return `truncate ${this.tableName.toLowerCase()}`;
   },
-
-  // is used if the an array with multiple empty values supplied
-  _defaultInsertValue: 'default',
 
   // Compiles an `insert` query, allowing for multiple
   // inserts using a single query statement.
   insert() {
-    const sql = QueryCompiler.prototype.insert.call(this)
+    const sql = QueryCompiler.prototype.insert.apply(this, arguments);
     if (sql === '') return sql;
-    const { returning } = this.single;
+    this._slightReturn();
     return {
-      sql: sql + this._returning(returning),
-      returning
+      sql,
     };
   },
 
-  // Compiles an `update` query, allowing for a return value.
+  // Compiles an `update` query, warning on unsupported returning
   update() {
-    const updateData = this._prepUpdate(this.single.update);
-    const wheres = this.where();
-    const { returning } = this.single;
+    const sql = QueryCompiler.prototype.update.apply(this, arguments);
+    this._slightReturn();
     return {
-      sql: this.with() +
-      `update ${this.single.only ? 'only ' : ''}${this.tableName} ` +
-      `set ${updateData.join(', ')}` +
-      (wheres ? ` ${wheres}` : '') +
-      this._returning(returning),
-      returning
+      sql,
     };
   },
 
-  // Compiles an `update` query, allowing for a return value.
+  // Compiles an `delete` query, warning on unsupported returning
   del() {
     const sql = QueryCompiler.prototype.del.apply(this, arguments);
-    const { returning } = this.single;
+    this._slightReturn();
     return {
-      sql: sql + this._returning(returning),
-      returning
+      sql,
     };
   },
 
-  _returning(value) {
-    return value ? ` returning ${this.formatter.columnize(value)}` : '';
+  // simple: if trying to return, warn
+  _slightReturn() {
+    if (this.single.isReturning) {
+      this.client.logger.warn(
+        'insert/update/delete returning is not supported by redshift dialect'
+      );
+    }
   },
 
   forUpdate() {
-    //return 'for update';
+    this.client.logger.warn('table lock is not supported by redshift dialect');
+    return '';
   },
 
   forShare() {
-    return 'for share';
+    this.client.logger.warn(
+      'lock for share is not supported by redshift dialect'
+    );
+    return '';
   },
 
   // Compiles a columnInfo query
   columnInfo() {
     const column = this.single.columnInfo;
+    let schema = this.single.schema;
 
-    let sql = 'select * from information_schema.columns where table_name = ? and table_catalog = ?';
-    const bindings = [this.single.table, this.client.database()];
+    // The user may have specified a custom wrapIdentifier function in the config. We
+    // need to run the identifiers through that function, but not format them as
+    // identifiers otherwise.
+    const table = this.client.customWrapIdentifier(this.single.table, identity);
 
-    if (this.single.schema) {
+    if (schema) {
+      schema = this.client.customWrapIdentifier(schema, identity);
+    }
+
+    let sql =
+      'select * from information_schema.columns where table_name = ? and table_catalog = ?';
+    const bindings = [
+      table.toLowerCase(),
+      this.client.database().toLowerCase(),
+    ];
+
+    if (schema) {
       sql += ' and table_schema = ?';
-      bindings.push(this.single.schema);
+      bindings.push(schema);
     } else {
-      sql += ' and table_schema = current_schema';
+      sql += ' and table_schema = current_schema()';
     }
 
     return {
       sql,
       bindings,
       output(resp) {
-        const out = reduce(resp.rows, function(columns, val) {
-          columns[val.column_name] = {
-            type: val.data_type,
-            maxLength: val.character_maximum_length,
-            nullable: (val.is_nullable === 'YES'),
-            defaultValue: val.column_default
-          };
-          return columns;
-        }, {});
-        return column && out[column] || out;
-      }
+        const out = reduce(
+          resp.rows,
+          function(columns, val) {
+            columns[val.column_name] = {
+              type: val.data_type,
+              maxLength: val.character_maximum_length,
+              nullable: val.is_nullable === 'YES',
+              defaultValue: val.column_default,
+            };
+            return columns;
+          },
+          {}
+        );
+        return (column && out[column]) || out;
+      },
     };
-  }
+  },
+});
 
-})
-
-export default QueryCompiler_PG;
+export default QueryCompiler_Redshift;
