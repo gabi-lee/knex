@@ -11,6 +11,8 @@ import ColumnCompiler from './schema/columncompiler';
 import TableCompiler from './schema/tablecompiler';
 import SchemaCompiler from './schema/compiler';
 
+import { makeEscape } from '../../query/string';
+
 function Client_Redshift(config) {
   Client_PG.apply(this, arguments);
 }
@@ -49,7 +51,6 @@ assign(Client_Redshift.prototype, {
     return require('pg');
   },
 
-
   _escapeBinding: makeEscape({
     escapeArray(val, esc) {
       return esc(arrayString(val, esc));
@@ -69,10 +70,10 @@ assign(Client_Redshift.prototype, {
         }
       }
       escaped += "'";
-// removed by Gabi 29/7/2018 - redshift does not support Escaped literal as postgres
-//      if (hasBackslash === true) {
-//        escaped = 'E' + escaped;
-//      }
+      // removed by Gabi 29/7/2018 - redshift does not support Escaped literal as postgres
+      //      if (hasBackslash === true) {
+      //        escaped = 'E' + escaped;
+      //      }
       return escaped;
     },
     escapeObject(val, prepareValue, timezone, seen = []) {
@@ -89,7 +90,7 @@ assign(Client_Redshift.prototype, {
       return JSON.stringify(val);
     },
   }),
-/*
+  /*
   _escapeBinding: makeEscape({
     escapeArray(val, esc) {
       return esc(arrayString(val, esc))
