@@ -49,6 +49,86 @@ assign(Client_Redshift.prototype, {
     return require('pg');
   },
 
+
+  _escapeBinding: makeEscape({
+    escapeArray(val, esc) {
+      return esc(arrayString(val, esc));
+    },
+    escapeString(str) {
+      let hasBackslash = false;
+      let escaped = "'";
+      for (let i = 0; i < str.length; i++) {
+        const c = str[i];
+        if (c === "'") {
+          escaped += c + c;
+        } else if (c === '\\') {
+          escaped += c + c;
+          hasBackslash = true;
+        } else {
+          escaped += c;
+        }
+      }
+      escaped += "'";
+// removed by Gabi 29/7/2018 - redshift does not support Escaped literal as postgres
+//      if (hasBackslash === true) {
+//        escaped = 'E' + escaped;
+//      }
+      return escaped;
+    },
+    escapeObject(val, prepareValue, timezone, seen = []) {
+      if (val && typeof val.toPostgres === 'function') {
+        seen = seen || [];
+        if (seen.indexOf(val) !== -1) {
+          throw new Error(
+            `circular reference detected while preparing "${val}" for query`
+          );
+        }
+        seen.push(val);
+        return prepareValue(val.toPostgres(prepareValue), seen);
+      }
+      return JSON.stringify(val);
+    },
+  }),
+/*
+  _escapeBinding: makeEscape({
+    escapeArray(val, esc) {
+      return esc(arrayString(val, esc))
+    },
+    escapeString(str) {
+      let hasBackslash = false
+      let escaped = '\''
+      for (let i = 0; i < str.length; i++) {
+        const c = str[i]
+        if (c === '\'') {
+          escaped += c + c
+        } else if (c === '\\') {
+          escaped += c + c
+          hasBackslash = true
+        } else {
+          escaped += c
+        }
+      }
+      escaped += '\''
+// removed by Lior H. 6/2/2018 - redshift does not support Escaped literal as postgres
+      // if (hasBackslash === true) {
+      //   escaped = 'E' + escaped
+      // }
+
+      return escaped
+    },
+    escapeObject(val, prepareValue, timezone, seen = []) {
+      if (val && typeof val.toPostgres === 'function') {
+        seen = seen || [];
+        if (seen.indexOf(val) !== -1) {
+          throw new Error(`circular reference detected while preparing "${val}" for query`);
+        }
+        seen.push(val);
+        return prepareValue(val.toPostgres(prepareValue), seen);
+      }
+      return JSON.stringify(val);
+    }
+  }),
+*/
   // Ensures the response is returned in the same format as other clients.
   processResponse(obj, runner) {
     const resp = obj.response;
