@@ -1,5 +1,5 @@
 {
-  "name": "knex",
+  "name": "@adtechiumpublic/knex",
   "version": "0.13.0",
   "description": "A batteries-included SQL query & schema builder for Postgres, MySQL and SQLite3 and the Browser",
   "main": "knex.js",
